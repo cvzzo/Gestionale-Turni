@@ -24,6 +24,13 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Configurazione non versionata: in locale da local.properties, in CI (GitHub Actions) da variabili
+// d'ambiente con lo stesso nome, alimentate dai secrets del repository.
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+fun configurazione(nome: String): String? = System.getenv(nome) ?: localProperties.getProperty(nome)
+
 android {
     namespace = "it.simoc.gestioneturni"
     compileSdk = 36
@@ -32,25 +39,36 @@ android {
         applicationId = "it.simoc.gestioneturni"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // In CI arrivano dal tag (v1.2.3 → versionName 1.2.3, versionCode 10203).
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = findProperty("versionName") as String? ?: "1.0"
 
         testInstrumentationRunner = "it.simoc.gestioneturni.HiltTestRunner"
-        // Credenziali Supabase da local.properties (non versionato). La chiave "anon" è pubblica per
-        // design: la sicurezza dei dati la fanno le regole RLS lato database.
-        val localProperties = Properties().apply {
-            rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
-        }
-        buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("SUPABASE_URL", "")}\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProperties.getProperty("SUPABASE_ANON_KEY", "")}\"")
+        // La chiave "anon"/publishable è pubblica per design: la sicurezza dei dati la fanno le regole
+        // RLS lato database.
+        buildConfigField("String", "SUPABASE_URL", "\"${configurazione("SUPABASE_URL").orEmpty()}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${configurazione("SUPABASE_ANON_KEY").orEmpty()}\"")
 
         vectorDrawables {
             useSupportLibrary = true
         }
     }
 
+    signingConfigs {
+        // Senza keystore configurato la build di release resta non firmata (non installabile).
+        configurazione("RELEASE_KEYSTORE")?.let { keystore ->
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = configurazione("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = configurazione("RELEASE_KEY_ALIAS")
+                keyPassword = configurazione("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         getByName("release") {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

@@ -71,3 +71,25 @@ Configurazione (una volta sola):
    Mai la chiave `service_role`/`secret`: finirebbe dentro l'APK.
 4. Nell'app: la prima persona crea l'account e il calendario, poi da *Menu → Invita* condivide
    il codice; la seconda crea il suo account e inserisce il codice.
+
+## Build di rilascio
+
+Pushando un tag `vX.Y.Z` GitHub Actions (`.github/workflows/release.yml`) esegue i test, compila
+l'APK firmato e lo pubblica nella pagina **Releases** del repository:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+`versionName` è preso dal tag (`1.0.0`) e `versionCode` è calcolato come `X*10000 + Y*100 + Z`,
+quindi ogni nuovo tag deve avere un numero più alto del precedente.
+
+Secrets richiesti nel repository (Settings → Secrets and variables → Actions): `SUPABASE_URL`,
+`SUPABASE_ANON_KEY`, `RELEASE_KEYSTORE_BASE64` (il keystore `.jks` codificato in base64),
+`RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`.
+
+Per una build di release in locale basta aggiungere le stesse chiavi (con `RELEASE_KEYSTORE` = percorso
+del file `.jks`, con le barre `/`) in `local.properties` e lanciare `./gradlew assembleRelease`.
+Il keystore **non** va mai nel repository: se si perde non si possono più pubblicare aggiornamenti
+installabili sopra la versione esistente.
